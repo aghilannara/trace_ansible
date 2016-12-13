@@ -1,0 +1,71 @@
+---
+# tasks file for hdp25.ambari-prep
+
+- name: disable selinux
+  shell: sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config /etc/selinux/config
+
+- name: restart machine
+  shell: sleep 2 && shutdown -r now "Ansible updates triggered"
+  async: 1
+  poll: 0
+  sudo: true
+  ignore_errors: true
+
+- name: waiting for server to come back
+  local_action: wait_for host={{ ambari_url }} state=started delay=30 timeout=120
+  sudo: false
+
+- name: install packages
+  yum: name=openssh-clients,curl,unzip,wget,openssl,python,openssl-devel,python-devel,ntp,tar,bzip2 state=present
+
+- name: enable ntp
+  shell: systemctl enable ntpd
+
+- name: start service ntpd
+  shell: systemctl start ntpd
+
+- name: check if service firewalld is installed
+  shell: "service firewalld status"
+  register: _svc_firewalld
+  failed_when: > 
+      _svc_firewalld.rc != 0 and ("not-found" not in _svc_firewalld.stdout)
+
+- name: disable firewall
+  service: name=firewalld state=stopped enabled=no
+  when: "_svc_firewalld.rc == 0"
+
+- name: check if Oracle JDK is installed
+  command: rpm -q {{ java_jdk }}
+  register: jdk_rpm_check
+  ignore_errors: yes
+
+- name: install Oracle JDK
+  yum: name={{ jdk_rpm_url }}
+  when: jdk_rpm_check.rc == 1
+
+- name: set default java
+  alternatives: name=java path=/usr/java/{{ java_jdk }}/jre/bin/java
+
+- name: Add mappings to /etc/hosts
+  blockinfile:
+    dest: /etc/hosts
+    block: |
+      {{item.ip}} {{item.name}}
+    marker: "# {mark} ANSIBLE MANAGED BLOCK {{item.name}}"
+  with_items:
+    - { name: hdpmaster1.tm.com.my, ip: 10.14.90.65 }
+    - { name: hdpworker1.tm.com.my, ip: 10.14.90.66 }
+    - { name: hdpworker2.tm.com.my, ip: 10.14.90.67 }
+    - { name: hdpworker3.tm.com.my, ip: 10.14.90.68 }
+
+- name: install HDP 2.5 repository
+  template: src=hdp.repo dest=/etc/yum.repos.d/hdp.repo
+
+- name: install Ambari 2.4.2.0 repository
+  template: src=ambari.repo dest=/etc/yum.repos.d/ambari.repo
+
+- name: copy ssh public key
+  authorized_key: user=root key="{{ item }}"
+  with_file:
+    - "{{ public_key }}"
+

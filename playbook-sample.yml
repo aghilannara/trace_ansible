@@ -1,0 +1,31 @@
+- hosts: master
+  remote_user: root
+  roles:
+  - { 
+      role: "hdp25.ambari-prep",
+      public_key: "files/id_rsa.pub",
+      ambari_2420_repourl: "http://10.45.3.105/mirror/hadoop/AMBARI-2.4.2.0/centos7/2.4.2.0-136/",
+      hdp_25_repourl: "http://10.45.3.105/mirror/hadoop/HDP/centos7/",
+      hdputils_25_repourl: "http://10.45.3.105/mirror/hadoop/HDP-UTILS-1.1.0.21/repos/centos7/",
+      jdk_rpm_url: "http://10.45.3.105/mirror/java_installers/jdk-8u112-linux-x64.rpm",
+      ambari_url: 10.14.90.65,
+      java_jdk: jdk1.8.0_112
+    }
+
+- hosts: master
+  remote_user: root
+  roles:
+  -  {
+       role: "hdp25.install-ambari",
+       private_key: "files/id_rsa",
+       java_home: "/usr/java/jdk1.8.0_112"
+     }
+
+- hosts: worker
+  remote_user: root
+  roles:
+  -  {
+        role: "hdp25.post-installation",
+        public_key: "files/id_rsa.pub",
+        private_key: "files/id_rsa"
+     }
